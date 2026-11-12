@@ -54,6 +54,18 @@
 
   const $ = (id) => document.getElementById(id);
 
+  function showBusy(text) {
+    const el = $("busy");
+    if (!el) return;
+    $("busyText").textContent = text || "Procesando…";
+    el.hidden = false;
+  }
+
+  function hideBusy() {
+    const el = $("busy");
+    if (el) el.hidden = true;
+  }
+
   function esc(s) {
     return String(s ?? "")
       .replace(/&/g, "&amp;")
@@ -237,18 +249,28 @@
     return true;
   }
 
-  function applyFilters() {
-    state.filtered = state.data.aprendices.filter((r) => modeMatch(r, "aprendiz") && sideFilters(r, "aprendiz"));
-    state.filteredFichas = state.data.fichas.filter((r) => modeMatch(r, "ficha") && sideFilters(r, "ficha"));
-    state.filteredPlan = state.data.plan.filter((r) => {
-      // plan uses responsable as instructor
-      const fake = { ...r, instructorAsignado: cleanInstructor(r.responsable), instructor: r.responsable };
-      return modeMatch(fake, "plan") && sideFilters(fake, "plan");
-    });
-    state.page = 1;
-    sortFiltered();
-    state.summary = buildSummary();
-    renderAll();
+  function applyFilters(opts = {}) {
+    const withBusy = opts.busy !== false;
+    if (withBusy) showBusy(opts.busyText || "Buscando…");
+    const run = () => {
+      try {
+        state.filtered = state.data.aprendices.filter((r) => modeMatch(r, "aprendiz") && sideFilters(r, "aprendiz"));
+        state.filteredFichas = state.data.fichas.filter((r) => modeMatch(r, "ficha") && sideFilters(r, "ficha"));
+        state.filteredPlan = state.data.plan.filter((r) => {
+          const fake = { ...r, instructorAsignado: cleanInstructor(r.responsable), instructor: r.responsable };
+          return modeMatch(fake, "plan") && sideFilters(fake, "plan");
+        });
+        state.page = 1;
+        sortFiltered();
+        state.summary = buildSummary();
+        renderAll();
+      } finally {
+        if (withBusy) hideBusy();
+      }
+    };
+    // Deja pintar el loader antes del filtro pesado
+    if (withBusy) setTimeout(run, 20);
+    else run();
   }
 
   function countMap(rows, getter) {
@@ -572,11 +594,14 @@
       .join("");
     $("drawer").classList.add("open");
     $("drawerBackdrop").classList.add("open");
+    $("drawer").setAttribute("aria-hidden", "false");
+    $("drawerBody").scrollTop = 0;
   }
 
   function closeDrawer() {
     $("drawer").classList.remove("open");
     $("drawerBackdrop").classList.remove("open");
+    $("drawer").setAttribute("aria-hidden", "true");
   }
 
   function setFiltersOpen(open) {
@@ -659,13 +684,20 @@
   }
 
   function replaceWorkingData(data, note) {
-    state.data = data;
-    buildIndexes();
-    enrichRows();
-    refreshFilterOptions();
-    $("metaStamp").textContent = `${state.data.meta.generado} · ${state.data.meta.totales.aprendices.toLocaleString("es-CO")} apr.${note ? " · " + note : ""}`;
-    readFiltersFromUI();
-    applyFilters();
+    showBusy("Actualizando consulta…");
+    setTimeout(() => {
+      try {
+        state.data = data;
+        buildIndexes();
+        enrichRows();
+        refreshFilterOptions();
+        $("metaStamp").textContent = `${state.data.meta.generado} · ${state.data.meta.totales.aprendices.toLocaleString("es-CO")} apr.${note ? " · " + note : ""}`;
+        readFiltersFromUI();
+        applyFilters({ busy: false });
+      } finally {
+        hideBusy();
+      }
+    }, 20);
   }
 
   function renderValidationBlock(validation) {
@@ -877,14 +909,14 @@
       analyzeBtn.disabled = true;
       const status = $("uploadStatus");
       status.hidden = false;
+      status.classList.remove("is-error", "is-ok");
       status.textContent = "Leyendo Excel… esto puede tardar unos segundos con archivos grandes.";
       $("diffReport").hidden = true;
+      showBusy("Importando y validando Excel…");
       try {
         // Validación previa de extensión
         if (!/\.xlsx$/i.test(file.name || "") && !/\.xls$/i.test(file.name || "")) {
-          status.hidden = false;
           status.classList.add("is-error");
-          status.classList.remove("is-ok");
           status.textContent = "ERROR: el archivo no es .xlsx. Suba el Excel unificado de Etapa Productiva.";
           $("diffReport").hidden = false;
           $("diffReport").innerHTML = renderValidationBlock({
@@ -896,6 +928,8 @@
         }
 
         const parsed = await window.ExcelImport.readFile(file);
+        showBusy("Comparando novedades…");
+        await new Promise((r) => setTimeout(r, 30));
         const baseline = state.data;
         const diff = parsed.validation?.ok === false
           ? {
@@ -921,6 +955,7 @@
           warnings: [],
         });
       } finally {
+        hideBusy();
         analyzeBtn.disabled = false;
       }
     });
@@ -1017,10 +1052,12 @@
       });
     });
 
-    $("drawerClose").addEventListener("click", closeDrawer);
+    ["drawerClose", "drawerBack", "drawerCloseBottom"].forEach((id) => {
+      $(id).addEventListener("click", closeDrawer);
+    });
     $("drawerBackdrop").addEventListener("click", closeDrawer);
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { closeDrawer(); setFiltersOpen(false); }
+      if (e.key === "Escape") { closeDrawer(); setFiltersOpen(false); hideBusy(); }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         $("globalSearch").focus();
@@ -1055,9 +1092,10 @@
       updateModeHint();
       bindEvents();
       readFiltersFromUI();
-      applyFilters();
+      applyFilters({ busy: false });
       const loader = $("loading");
       if (loader) loader.remove();
+      hideBusy();
 
       // Si hay una base aplicada antes en este navegador, avisar
       window.ExcelImport.loadBaseline().then((saved) => {

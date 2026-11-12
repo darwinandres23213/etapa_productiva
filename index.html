@@ -15,6 +15,14 @@
   <div id="loading" class="loading" aria-live="polite">
     <img src="sena-logo.svg" alt="" width="56" height="56" />
     <p>Cargando consulta Etapa Productiva…</p>
+    <div class="spinner" aria-hidden="true"></div>
+  </div>
+
+  <div id="busy" class="busy" hidden aria-live="polite">
+    <div class="busy-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="busyText">Procesando…</p>
+    </div>
   </div>
 
   <div class="topbar">
@@ -178,13 +186,17 @@
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
   <aside class="drawer" id="drawer" aria-hidden="true">
     <div class="drawer-head">
-      <div>
+      <button type="button" class="drawer-back" id="drawerBack" aria-label="Volver al listado">← Volver</button>
+      <button type="button" class="drawer-x" id="drawerClose" aria-label="Cerrar detalle" title="Cerrar">×</button>
+      <div class="drawer-titles">
         <h3 id="drawerTitle">Detalle</h3>
         <p id="drawerSub"></p>
       </div>
-      <button class="btn" id="drawerClose" type="button">Cerrar</button>
     </div>
     <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-foot">
+      <button type="button" class="btn btn-detalle" id="drawerCloseBottom">Cerrar detalle</button>
+    </div>
   </aside>
 
   <script src="excel-import.js"></script>
