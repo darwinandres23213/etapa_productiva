@@ -1,0 +1,13 @@
+*.bat
+*.py
+__pycache__/
+.git/
+.gitignore
+README.md
+*.md
+_test.xlsx
+*.xlsx
+.DS_Store
+Thumbs.db
+agent-tools/
+dashboard-etapa-productiva/

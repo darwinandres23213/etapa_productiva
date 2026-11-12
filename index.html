@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Consulta Etapa Productiva · SENA CDM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div id="loading" class="loading" aria-live="polite">
+    <img src="sena-logo.svg" alt="" width="56" height="56" />
+    <p>Cargando consulta Etapa Productiva…</p>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-row">
+        <img src="sena-logo.svg" alt="SENA" class="logo" />
+        <div>
+          <div class="brand-name">SENA · Centro de Diseño y Metrología</div>
+          <div class="brand-sub">Consulta Etapa Productiva · Técnico / Tecnólogo · Regional Distrito Capital</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span id="metaStamp" class="stamp">—</span>
+        <button type="button" class="btn btn-sm" id="btnOpenUpload">Actualizar Excel</button>
+        <button type="button" class="btn btn-sm" id="btnExport">CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="upload-panel" id="uploadPanel" hidden>
+    <div class="upload-inner">
+      <div class="upload-head">
+        <div>
+          <h2>Actualizar base desde Excel</h2>
+          <p>Suba el archivo unificado. Se comparará con la base actual y se listarán aprendices nuevos, eliminados y cambios de estado.</p>
+        </div>
+        <button type="button" class="btn btn-sm" id="btnCloseUpload">Cerrar</button>
+      </div>
+
+      <form id="uploadForm" class="upload-form">
+        <label class="file-drop" id="fileDrop">
+          <input type="file" id="excelFile" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+          <strong>Elija o suelte el Excel aquí</strong>
+          <span>Hoja Integral + Fichas + Plan de instructores</span>
+        </label>
+        <div class="upload-actions">
+          <button type="submit" class="btn btn-detalle" id="btnAnalyze" disabled>Analizar cambios</button>
+          <span id="uploadFileName" class="upload-fname">Ningún archivo</span>
+        </div>
+      </form>
+
+      <div id="uploadStatus" class="upload-status" hidden></div>
+      <div id="diffReport" class="diff-report" hidden></div>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <div class="toolbar-inner">
+      <div class="mode-row" role="group" aria-label="Tipo de búsqueda">
+        <button type="button" class="mode active" data-mode="todo">Todo</button>
+        <button type="button" class="mode" data-mode="aprendiz">Aprendiz</button>
+        <button type="button" class="mode" data-mode="instructor">Instructor</button>
+        <button type="button" class="mode" data-mode="ficha">Ficha</button>
+      </div>
+
+      <div class="search-row">
+        <input id="globalSearch" type="search" autocomplete="off"
+          placeholder="Documento, nombre, ficha, instructor, correo, empresa…" />
+        <button type="button" class="btn" id="btnClear">Limpiar</button>
+        <button type="button" class="btn" id="btnToggleFilters" aria-expanded="false">Filtros</button>
+      </div>
+
+      <div id="lookupHint" class="lookup-hint">Elija un modo o escriba libremente. La búsqueda cuenta resultados y cruza instructor / ficha.</div>
+    </div>
+  </div>
+
+  <div id="resultBanner" class="result-banner" hidden></div>
+
+  <div class="shell">
+    <aside class="filters" id="filtersPanel" data-open="false">
+      <div class="filters-head">
+        <strong>Filtros adicionales</strong>
+        <button type="button" class="btn btn-sm" id="btnCloseFilters">Cerrar</button>
+      </div>
+      <div class="filters-grid">
+        <label>Estado aprendiz<select id="fEstado"><option value="">Todos</option></select></label>
+        <label>Nivel<select id="fNivel"><option value="">Todos</option></select></label>
+        <label>Jornada<select id="fJornada"><option value="">Todas</option></select></label>
+        <label>Modalidad<select id="fModalidad"><option value="">Todas</option></select></label>
+        <label>Etapa<select id="fEtapa"><option value="">Todas</option></select></label>
+        <label>Estado ficha<select id="fEstadoFicha"><option value="">Todos</option></select></label>
+        <label>Alternativa EP<select id="fAlternativa"><option value="">Todas</option></select></label>
+        <label>Instructor<select id="fInstructor"><option value="">Todos</option></select></label>
+        <label>Estado RAP<select id="fRap"><option value="">Todos</option></select></label>
+        <label>Estado CMP<select id="fCmp"><option value="">Todos</option></select></label>
+        <label>Programa<select id="fPrograma"><option value="">Todos</option></select></label>
+        <label>Fuente<select id="fFuente"><option value="">Todas</option></select></label>
+        <label>Ficha Exacta<input id="fFicha" type="text" inputmode="numeric" placeholder="Ej. 2740649" /></label>
+        <label>Empresa / NIT<input id="fEmpresa" type="text" placeholder="Contiene…" /></label>
+      </div>
+      <button type="button" class="btn" id="btnResetFilters">Restablecer filtros</button>
+    </aside>
+    <div class="filters-backdrop" id="filtersBackdrop" hidden></div>
+
+    <main class="main">
+      <section class="kpis" id="kpis"></section>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="aprendices" type="button">Aprendices <span id="tabAprCount">0</span></button>
+        <button class="tab" data-tab="fichas" type="button">Fichas <span id="tabFicCount">0</span></button>
+        <button class="tab" data-tab="plan" type="button">Plan instructores <span id="tabPlanCount">0</span></button>
+      </div>
+
+      <section id="view-aprendices" class="panel">
+        <div class="section-tools">
+          <button type="button" class="btn btn-sm" id="btnToggleCharts" aria-expanded="false">Ver gráficos</button>
+          <label>Filas
+            <select id="pageSize">
+              <option selected>25</option>
+              <option>50</option>
+              <option>100</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="charts collapsed" id="chartsWrap" hidden>
+          <div class="chart-box"><div class="chart-title">Estado aprendiz</div><canvas id="chartEstado"></canvas></div>
+          <div class="chart-box"><div class="chart-title">Nivel</div><canvas id="chartNivel"></canvas></div>
+          <div class="chart-box"><div class="chart-title">Alternativa EP</div><canvas id="chartAlt"></canvas></div>
+        </div>
+
+        <div class="table-head">
+          <div>
+            <h2>Directorio de aprendices</h2>
+            <p id="resultCount">—</p>
+          </div>
+        </div>
+
+        <div class="list-wrap" id="listAprendices"></div>
+        <div class="pager">
+          <div id="pageInfo">—</div>
+          <div class="pages">
+            <button class="btn" id="prevPage" type="button">Anterior</button>
+            <button class="btn" id="nextPage" type="button">Siguiente</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-fichas" class="panel" hidden>
+        <div class="table-head">
+          <div>
+            <h2>Fichas</h2>
+            <p id="fichasCount">—</p>
+          </div>
+        </div>
+        <div class="list-wrap" id="listFichas"></div>
+      </section>
+
+      <section id="view-plan" class="panel" hidden>
+        <div class="table-head">
+          <div>
+            <h2>Plan de trabajo instructores</h2>
+            <p id="planCount">—</p>
+          </div>
+        </div>
+        <div class="list-wrap" id="listPlan"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <h3 id="drawerTitle">Detalle</h3>
+        <p id="drawerSub"></p>
+      </div>
+      <button class="btn" id="drawerClose" type="button">Cerrar</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </aside>
+
+  <script src="excel-import.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

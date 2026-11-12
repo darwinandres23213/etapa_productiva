@@ -1,0 +1,54 @@
+server {
+    listen       ${PORT};
+    server_name  _;
+    root   /usr/share/nginx/html;
+    index  index.html;
+
+    # Límites razonables para subir Excel desde el navegador (solo cliente)
+    client_max_body_size 40m;
+
+    # Compresión fuerte: data.json ~20MB baja mucho con gzip
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        image/svg+xml
+        application/octet-stream;
+    gzip_vary on;
+
+    # Seguridad básica
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok';
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache corto para JS/CSS (se actualizan con el deploy)
+    location ~* \.(js|css|svg)$ {
+        expires 1h;
+        add_header Cache-Control "public, max-age=3600";
+        try_files $uri =404;
+    }
+
+    # data.json grande: cache breve + gzip
+    location = /data.json {
+        expires 5m;
+        add_header Cache-Control "public, max-age=300";
+        default_type application/json;
+    }
+
+    error_page 404 /index.html;
+}

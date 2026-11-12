@@ -1,0 +1,10 @@
+# Blueprint Render: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: sena-etapa-productiva
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
